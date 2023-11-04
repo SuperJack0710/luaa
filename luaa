@@ -1,0 +1,424 @@
+--By SuperJack0710
+--Version 1.03
+
+--Changelog (1.03)
+
+--Added CEnums
+--Added newEnumtype()
+------------------
+
+local file_types = {".drive", ".crefol", ".fol", ".scr", ".txt", ".shrtcut", ".mod"}
+local player = game.Players.LocalPlayer
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local httpService = game:GetService("HttpService")
+local letters = {"a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"}
+
+local templates = {
+driveFileTemplate = {[1] = {}, [2] = "Drive", [3] = ".drive", [4] = {}},
+crefolFileTemplate = {[1] = {}, [2] = "CoreFolder", [3] = ".crefol",[4] = {}},
+folFileTemplate = {[1] = {}, [2] = "Folder", [3] = ".fol", [4] = {}},
+scrFileTemplate = {[1] = {}, [2] = "Script", [3] = ".scr", [4] = {[1] = ""}},
+txtFileTemplate = {[1] = {}, [2] = "Text", [3] = ".txt", [4] = {[1] = ""}},    
+shrtcutFileTemplate = {[1] = {}, [2] = "Shortcut", [3] = ".shrtcut", [4] = {[1] = nil, [2] = "rbxassetid://"}},
+modFileTemplate = {[1] = {}, [2] = "Module",[3] = ".mod",[4] = {[1] = ""}}	
+}
+
+
+local fileMetaTable = {
+__index = function(t,k)
+if k == "Name" then
+return t[2]
+else
+if k == "FileType" then
+return t[3]		
+else --If no common value is being indexed then:	
+if t[4][k] then
+return t[4][k]
+else
+error("Cannot find " .. k .. " inside" .. t[3])				
+end
+	  end
+   end
+end,	
+__newindex = function(t,k,v)
+if k == "Name" then
+t[2] = v
+else		
+if k == "FileType" then			
+error("Attempt to set read-only value")
+else				
+if k == "Parent" then				
+table.insert(v,t)					
+	     end		
+	  end			
+   end
+end,	
+	
+	
+	
+	
+
+}
+local folderMetaTable = {
+__index = function(t,k)
+if k == "Name" then
+return t[2]
+else
+if k == "FileType" then
+return t[3]		
+else --If no common value is being indexed then:	
+if t[4][k] then
+return t[4][k]
+else
+if t[1][k] then			
+return t[1][k]						
+else			
+error("Could not index")
+                end
+			end
+		end
+	end
+end,	
+__newindex = function(t,k,v)
+if k == "Name" then
+t[2] = v
+else		
+if k == "FileType" then			
+error("Attempt to set read-only value")
+else				
+if k == "Parent" then				
+table.insert(v[1],t)					
+         end		
+      end			
+   end
+end,	
+
+
+	
+}
+
+local luaa = {}
+luaa.Drive = {[1] = {}, [2] = "Drive", [3] = ".drive"}
+luaa.libraries = {}
+luaa.globals = {}
+luaa.apis = {}
+
+local drive = luaa.Drive
+
+--File types
+
+--.drive - Cannot be created. Represents the drive
+
+--.crefol - Stands for core folder.
+
+--.fol - Stands for folder. A way to organize files
+
+--.scr - Script file
+
+--.txt - Text file
+
+--.shrtcut - Shortcut. Only renders whenever parented to Desktop. When clicked, it calls the function binded to .OnClick and passes the mouse's X and Y position.
+
+----------------------------------------------------------------------------------------------
+
+--Functions
+local function RemoveMetaTables(t: any) --Call on FileSystem before saving to save space by removing metatables
+    
+local subTables = {} 
+    
+for k,v in pairs(t) do --Remove t's metatable and prepare to call removeMetaTables on sub tables
+if type(v) == "table" then
+setmetatable(v,nil)            
+for k,val in v do            
+if type(val) == "table" then    
+table.insert(subTables,val)                
+   end
+end
+else
+continue
+   end
+end
+for _, subTable in subTables do 
+RemoveMetaTables(subTables)
+   end
+end
+
+local function IsFileTypeAFolder(fileType: any)
+if string.find(fileType,"fol") then
+return true
+else        
+return false
+   end
+end
+
+local function createFile(isFolder: boolean, fileType: string)
+local file = templates[string.sub(fileType, 2, #fileType) .. "FileTemplate"]
+function file:Delete()
+self = nil
+end	
+function file:IsA(fileType: string)		
+return self[3] == fileType
+end
+function file:Clone()
+local clone = file
+return clone
+end
+function file:SetMetadata(metadata: string)
+luaa.libraries.filesystem.writemetadata(self, metadata)
+end
+function file:GetMetadata()
+luaa.libraries.filesystem.readmetadata(self)
+end	
+	
+if not isFolder then
+setmetatable(file,fileMetaTable)    
+file[1] = nil
+else    
+function file:GetChildren()
+return file[1]
+end
+function file:WaitForChild(name: string)
+repeat task.wait() until file[1][name]
+return file[1][name]
+end		
+function file:FindFirstChild(name: string)
+for i,v in file[1] do
+if v[2] == name then				
+return v			
+   end
+end			
+error("Could not find child with name " .. name .. " under " .. file[2] .. "." )
+end	
+setmetatable(file,folderMetaTable)
+end
+return file
+end
+
+luaa.Drive[1].Users = {}
+
+--Create filesystem library and file system related globals
+luaa.libraries.filesystem = {}
+
+--Globals 
+luaa.globals.loadfile = function(filePath: any)
+	if not IsFileTypeAFolder(filePath[3]) then    
+		local fileObject = {
+			["children"] = filePath[1],    
+			["name"] = filePath[2],
+			["type"] = filePath[3],
+			["data"] = filePath[4]
+			["metadata"] == pcall(function() return filePath[5] end)
+		}
+		return fileObject
+	else    
+		error("Cannot load a folder.")
+	end
+end
+
+
+--filesystem library.
+
+function luaa.libraries.filesystem.create(fileType: string)
+
+--Check if fileType is valid
+if fileType == ".drive" then    
+error("Cannot create file type.")
+else
+        
+for i,v in file_types do
+if i == #file_types then
+error("Unknown file type.")
+else
+if v == fileType then            
+break    
+else                
+continue
+      end
+   end    
+end
+local file = createFile(IsFileTypeAFolder(fileType),fileType)
+file = templates[string.sub(fileType,2,9999999) .. "FileTemplate"]
+return file
+   end
+end
+function luaa.libraries.filesystem.delete(file: any)
+if file[3] ~= ".drive" or ".crefol" then
+file = nil
+else
+error("Cannot delete protected files.")    
+   end    
+end
+function luaa.libraries.filesystem.isfolder(file: any)
+if string.find(file[3],"fol") or string.find(file[3],"drive") then    
+return true
+else        
+return false
+   end
+end
+function luaa.libraries.filesystem.getsize(file: any)    
+return string.len(file[4])    
+end
+function luaa.libraries.filesystem.isA(file: any, fileType: string)
+for i,v in file_types do
+if i == #file_types then
+error("Unknown file type.")
+else
+if v == fileType then            
+break    
+else                
+continue
+    end
+end    
+
+end
+if file[3] == fileType then
+return true 
+else
+return false
+   end
+end
+function luaa.libraries.filesystem.writemetadata(file: any, metadata: string)
+if not file then	
+error("No file found")
+else		
+if string.len(metadata)	> 300 then	
+error("Metadata cannot be longer than 300 characters.")
+else
+file[5] = metadata
+	  end
+   end
+end
+function luaa.libraries.filesystem.readmetadata(file: any)
+if file[5] == nil then
+warn("No metadata associated with file.")		
+return nil		
+else	
+return file[5]
+   end
+end
+function luaa.libraries.filesystem.newtype(fileType: string, defaultName: string)
+if fileType:sub(1,2) ~= "." then
+local template = {[1] = {}, [2] = defaultName, [3] = fileType, [4] = {}}
+table.insert(file_types, fileType)	
+templates[fileType:sub(1,2) .. "FileTemplate"] = template	
+else
+error("File type string must start with .")
+   end
+end
+
+--Clipboard API
+
+luaa.globals.setclipboard = function(text: string)
+player:SetAttribute("luaa/clipboard",text)
+end
+luaa.globals.getclipboard = function()
+if not player:GetAttribute("luaa/clipboard")	 then
+error("No text saved to clipboard yet")
+else
+return player:GetAttribute("luaa/clipboard")
+   end
+end
+
+--users api
+luaa.apis.users = {}
+function luaa.apis.users.create(name: string, pass: string)
+local file = luaa.libraries.filesystem.create(".fol")	
+file.Name = name	
+file.Parent = luaa.Drive.Users	
+	luaa.libraries.filesystem.writemetadata(file, pass .. "|" .. name)
+
+end
+function luaa.apis.users.delete(name: string)
+luaa.Drive.Users[1][name] = nil
+end
+
+--http library
+luaa.libraries.http = {}
+function luaa.libraries.http.postasync(url: string, data: any, headers: any)
+if not (string.sub(url,1,5) == "http" or "https") then
+error("URL must be HTTP or HTTPS.")
+else
+replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent:FireServer(url, data, headers,"POST")
+return replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent.OnClientEvent:Wait()
+   end
+end
+function luaa.libraries.http.getasync(url: string, headers: any)
+if string.sub(url,1,5) ~= "http" or "https" then
+error("URL must be HTTP or HTTPS.")
+else
+replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent:FireServer(url, nil, headers, "GET")
+return replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent.OnClientEvent:Wait()
+   end
+end
+function luaa.libraries.http.deleteasync(url: string,  headers: any)
+if string.sub(url,1,5) ~= "http" or "https" then
+error("URL must be HTTP or HTTPS.")
+else
+replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent:FireServer(url, nil, headers, "DELETE")
+return replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent.OnClientEvent:Wait()
+	end
+end
+function luaa.libraries.http.patchasync(url: string, data: any, headers: any)
+if string.sub(url,1,5) ~= "http" or "https" then
+error("URL must be HTTP or HTTPS.")
+else
+replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent:FireServer(url, data, headers,"PATCH")
+return replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent.OnClientEvent:Wait()
+	end
+end
+function luaa.libraries.http.putasync(url: string, data: any, headers: any)
+if string.sub(url,1,5) ~= "http" or "https" then
+error("URL must be HTTP or HTTPS.")
+else
+replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent:FireServer(url, data, headers,"PATCH")
+return replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent.OnClientEvent:Wait()
+	end
+end
+function luaa.libraries.http.urlencode(url: string)
+return httpService:UrlEncode(url)
+end
+function luaa.libraries.http.jsonencode(luaTable: any)
+return httpService:JSONEncode(luaTable)
+end
+function luaa.libraries.http.jsondecode(json: any)
+return httpService:JSONDecode(json)
+end
+function luaa.libraries.http.generateguid(wrapincurlybraces: boolean)
+return httpService:GenerateGUID(wrapincurlybraces)
+end
+
+
+--custom enums
+luaa.globals.CEnums = {}
+
+function luaa.globals.newEnumType(enumTypeName: string)
+if luaa.globals.CEnums[enumTypeName] then	
+error("A custom EnumType with the name " .. enumTypeName .. " already exists.")		
+else		
+luaa.globals.CEnums[enumTypeName] = {}
+local enumType = luaa.globals.CEnums[enumTypeName]	
+function enumType:GetEnumItems()
+local enumItems = {}			
+for i,v in enumType do	
+if typeof(v) ~= "function" then				
+table.insert(enumItems,v)
+   end		
+return enumItems				
+end
+
+return luaa.globals.CEnums[enumTypeName]
+      end
+function enumType:CreateEnumItem(enumItemName: string)	
+if luaa.globals.CEnums[enumTypeName][enumItemName] then
+error("A custom EnumItem with the name " .. enumItemName .. " already exists")	
+else				
+luaa.globals.CEnums[enumTypeName][enumItemName] = {}		
+local enumItem = luaa.globals.CEnums[enumTypeName][enumItemName]
+enumItem.Parent = enumType
+enumItem.Name = enumItemName
+	     end	
+	  end
+   end
+end
+
+return luaa
