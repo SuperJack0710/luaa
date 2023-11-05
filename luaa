@@ -1,10 +1,10 @@
 --By SuperJack0710
---Version 1.03
+--Version 1.04
 
---Changelog (1.03)
+--Changelog (1.04)
 
---Added CEnums
---Added newEnumtype()
+--Added newsignal() global
+--Added Signals
 ------------------
 
 local file_types = {".drive", ".crefol", ".fol", ".scr", ".txt", ".shrtcut", ".mod"}
@@ -421,4 +421,36 @@ enumItem.Name = enumItemName
    end
 end
 
+--signals
+function luaa.globals.newsignal(name: string)
+local signal = {}
+function signal:Connect(func: any)
+local SignalConnection	= {}
+SignalConnection.Listener = func
+function SignalConnection:Disconnect()
+self = nil	
+   end
+end
+function signal:Fire(...)
+for i,v in signal:GetConnections() do
+v.Listener(...)			
+      end
+   end	
+function signal:Once(func: any)
+local connection
+connection = signal:Connect(function()
+func()
+connection:Disconnect()		
+end)
+end
+function signal:GetConnections()
+local returnTable = {}
+for i,v in signal do
+if typeof(v) == "table" then
+table.insert(returnTable,v)			
+		  end
+	   end
+   return returnTable
+   end
+end
 return luaa
