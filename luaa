@@ -11,7 +11,12 @@ local file_types = {".drive", ".crefol", ".fol", ".scr", ".txt", ".shrtcut", ".m
 local player = game.Players.LocalPlayer
 local replicatedStorage = game:GetService("ReplicatedStorage")
 local httpService = game:GetService("HttpService")
-local letters = {"a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"}
+local letters = {"a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z","A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","1","2","3","4","5","6","7","8","9","0","*","#","@","!","%","^","&","(",")","?",">","/","<",".",",","[","]","{","}"}
+local processTerminateFunctions = {}
+local processes = {}
+local lastPID = 0
+
+--Load modules
 
 local templates = {
 driveFileTemplate = {[1] = {}, [2] = "Drive", [3] = ".drive", [4] = {}},
@@ -23,6 +28,17 @@ shrtcutFileTemplate = {[1] = {}, [2] = "Shortcut", [3] = ".shrtcut", [4] = {[1] 
 modFileTemplate = {[1] = {}, [2] = "Module",[3] = ".mod",[4] = {[1] = ""}}	
 }
 
+local function luaa_error(...)
+	luaa_error("[Luaa]: " .. ...)
+end
+
+local function luaa_warn(...)
+warn("[Luaa]: " .. ...)
+end
+
+local function luaa_print(...)
+print("[Luaa]: " .. ...)
+end
 
 local fileMetaTable = {
 __index = function(t,k)
@@ -35,7 +51,7 @@ else --If no common value is being indexed then:
 if t[4][k] then
 return t[4][k]
 else
-error("Cannot find " .. k .. " inside" .. t[3])				
+luaa_error("Cannot find " .. k .. " inside" .. t[3])				
 end
 	  end
    end
@@ -45,7 +61,7 @@ if k == "Name" then
 t[2] = v
 else		
 if k == "FileType" then			
-error("Attempt to set read-only value")
+luaa_error("Attempt to set read-only value")
 else				
 if k == "Parent" then				
 table.insert(v,t)					
@@ -73,7 +89,7 @@ else
 if t[1][k] then			
 return t[1][k]						
 else			
-error("Could not index")
+luaa_error("Could not index")
                 end
 			end
 		end
@@ -84,7 +100,7 @@ if k == "Name" then
 t[2] = v
 else		
 if k == "FileType" then			
-error("Attempt to set read-only value")
+luaa_error("Attempt to set read-only value")
 else				
 if k == "Parent" then				
 table.insert(v[1],t)					
@@ -187,11 +203,19 @@ if v[2] == name then
 return v			
    end
 end			
-error("Could not find child with name " .. name .. " under " .. file[2] .. "." )
+luaa_error("Could not find child with name " .. name .. " under " .. file[2] .. "." )
 end	
 setmetatable(file,folderMetaTable)
 end
 return file
+end
+
+local function generateId()
+local result = ""	
+for i = 1, 100 do
+result = result .. letters[math.random(1,#letters)]		
+   end
+return result	
 end
 
 luaa.Drive[1].Users = {}
@@ -211,7 +235,7 @@ luaa.globals.loadfile = function(filePath: any)
 		}
 		return fileObject
 	else    
-		error("Cannot load a folder.")
+		luaa_error("Cannot load a folder.")
 	end
 end
 
@@ -222,12 +246,12 @@ function luaa.libraries.filesystem.create(fileType: string)
 
 --Check if fileType is valid
 if fileType == ".drive" then    
-error("Cannot create file type.")
+luaa_error("Cannot create file type.")
 else
         
 for i,v in file_types do
 if i == #file_types then
-error("Unknown file type.")
+luaa_error("Unknown file type.")
 else
 if v == fileType then            
 break    
@@ -245,7 +269,7 @@ function luaa.libraries.filesystem.delete(file: any)
 if file[3] ~= ".drive" or ".crefol" then
 file = nil
 else
-error("Cannot delete protected files.")    
+luaa_error("Cannot delete protected files.")    
    end    
 end
 function luaa.libraries.filesystem.isfolder(file: any)
@@ -261,7 +285,7 @@ end
 function luaa.libraries.filesystem.isA(file: any, fileType: string)
 for i,v in file_types do
 if i == #file_types then
-error("Unknown file type.")
+luaa_error("Unknown file type.")
 else
 if v == fileType then            
 break    
@@ -279,10 +303,10 @@ return false
 end
 function luaa.libraries.filesystem.writemetadata(file: any, metadata: string)
 if not file then	
-error("No file found")
+luaa_error("No file found")
 else		
 if string.len(metadata)	> 300 then	
-error("Metadata cannot be longer than 300 characters.")
+luaa_error("Metadata cannot be longer than 300 characters.")
 else
 file[5] = metadata
 	  end
@@ -290,7 +314,7 @@ file[5] = metadata
 end
 function luaa.libraries.filesystem.readmetadata(file: any)
 if file[5] == nil then
-warn("No metadata associated with file.")		
+luaa_warn("No metadata associated with file.")		
 return nil		
 else	
 return file[5]
@@ -302,7 +326,7 @@ local template = {[1] = {}, [2] = defaultName, [3] = fileType, [4] = {}}
 table.insert(file_types, fileType)	
 templates[fileType:sub(1,2) .. "FileTemplate"] = template	
 else
-error("File type string must start with .")
+luaa_error("File type string must start with .")
    end
 end
 
@@ -313,7 +337,7 @@ player:SetAttribute("luaa/clipboard",text)
 end
 luaa.globals.getclipboard = function()
 if not player:GetAttribute("luaa/clipboard")	 then
-error("No text saved to clipboard yet")
+luaa_error("No text saved to clipboard yet")
 else
 return player:GetAttribute("luaa/clipboard")
    end
@@ -331,12 +355,15 @@ end
 function luaa.apis.users.delete(name: string)
 luaa.Drive.Users[1][name] = nil
 end
+function luaa.apis.users.iscredvalid(user: string, pass: string)
+return luaa.Drive.Users[user]:GetMetadata():split("|")[2] == pass
+end
 
 --http library
 luaa.libraries.http = {}
 function luaa.libraries.http.postasync(url: string, data: any, headers: any)
 if not (string.sub(url,1,5) == "http" or "https") then
-error("URL must be HTTP or HTTPS.")
+luaa_error("URL must be HTTP or HTTPS.")
 else
 replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent:FireServer(url, data, headers,"POST")
 return replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent.OnClientEvent:Wait()
@@ -344,7 +371,7 @@ return replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent.OnClientEve
 end
 function luaa.libraries.http.getasync(url: string, headers: any)
 if string.sub(url,1,5) ~= "http" or "https" then
-error("URL must be HTTP or HTTPS.")
+luaa_error("URL must be HTTP or HTTPS.")
 else
 replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent:FireServer(url, nil, headers, "GET")
 return replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent.OnClientEvent:Wait()
@@ -352,7 +379,7 @@ return replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent.OnClientEve
 end
 function luaa.libraries.http.deleteasync(url: string,  headers: any)
 if string.sub(url,1,5) ~= "http" or "https" then
-error("URL must be HTTP or HTTPS.")
+luaa_error("URL must be HTTP or HTTPS.")
 else
 replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent:FireServer(url, nil, headers, "DELETE")
 return replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent.OnClientEvent:Wait()
@@ -360,7 +387,7 @@ return replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent.OnClientEve
 end
 function luaa.libraries.http.patchasync(url: string, data: any, headers: any)
 if string.sub(url,1,5) ~= "http" or "https" then
-error("URL must be HTTP or HTTPS.")
+luaa_error("URL must be HTTP or HTTPS.")
 else
 replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent:FireServer(url, data, headers,"PATCH")
 return replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent.OnClientEvent:Wait()
@@ -368,7 +395,7 @@ return replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent.OnClientEve
 end
 function luaa.libraries.http.putasync(url: string, data: any, headers: any)
 if string.sub(url,1,5) ~= "http" or "https" then
-error("URL must be HTTP or HTTPS.")
+luaa_error("URL must be HTTP or HTTPS.")
 else
 replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent:FireServer(url, data, headers,"PATCH")
 return replicatedStorage.Events.Luaa.Libraries.http.HTTPRequestEvent.OnClientEvent:Wait()
@@ -391,9 +418,9 @@ end
 --custom enums
 luaa.globals.CEnums = {}
 
-function luaa.globals.newEnumType(enumTypeName: string)
+function luaa.globals.newenumtype(enumTypeName: string)
 if luaa.globals.CEnums[enumTypeName] then	
-error("A custom EnumType with the name " .. enumTypeName .. " already exists.")		
+luaa_error("A custom EnumType with the name " .. enumTypeName .. " already exists.")		
 else		
 luaa.globals.CEnums[enumTypeName] = {}
 local enumType = luaa.globals.CEnums[enumTypeName]	
@@ -410,7 +437,7 @@ return luaa.globals.CEnums[enumTypeName]
       end
 function enumType:CreateEnumItem(enumItemName: string)	
 if luaa.globals.CEnums[enumTypeName][enumItemName] then
-error("A custom EnumItem with the name " .. enumItemName .. " already exists")	
+luaa_error("A custom EnumItem with the name " .. enumItemName .. " already exists")	
 else				
 luaa.globals.CEnums[enumTypeName][enumItemName] = {}		
 local enumItem = luaa.globals.CEnums[enumTypeName][enumItemName]
@@ -453,4 +480,31 @@ table.insert(returnTable,v)
    return returnTable
    end
 end
+
+--process library
+luaa.libraries.process = {}
+
+function luaa.libraries.process.create(app: any)
+local PID = lastPID + 1
+lastPID = PID
+	
+local processObject = {}
+processObject.ProcessID = PID
+processObject.Source = app.Source
+processObject.Running = true
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 return luaa
