@@ -1,10 +1,9 @@
 --By SuperJack0710
---Version 1.04
+--Version 1.05
 
---Changelog (1.04)
+--Changelog (1.05)
 
---Added newsignal() global
---Added Signals
+--Added process library
 ------------------
 
 local file_types = {".drive", ".crefol", ".fol", ".scr", ".txt", ".shrtcut", ".mod"}
