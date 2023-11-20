@@ -1,3 +1,3 @@
 # Luaa
 
-Luaa is a API for creating applications inside my project, OS.
+Luaa is a framework for creating applications inside my project, OS.
