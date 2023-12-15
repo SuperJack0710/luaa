@@ -24,12 +24,13 @@ SOFTWARE.
 --[[
 -----------------
 By SuperJack0710
-v1.05
+v1.06 [12/15/2023]
 
 -----------------
-Changelog (v1.05)
+Changelog (v1.06) [12/15/2023]
 
-
+Added input library
+Patched privilege escalation vulnerability
 ------------------
 --]]
 
@@ -50,8 +51,10 @@ _G.t = {}
 table.insert(_G.t, coroutine.running())
 	
 --Load dependencies
-local ls = require(dependencies.Loadstring)
+local ls = require(dependencies.loadstring)
 local inputAPI = require(dependencies.KeybinderV4)
+local compile = require(dependencies.Yueliang)
+local load_bytecode = require(dependencies.Rerubi)
 
 local templates = {
 driveFileTemplate = {[1] = {}, [2] = "Drive", [3] = ".drive", [4] = {}},
@@ -63,7 +66,7 @@ modFileTemplate = {[1] = {}, [2] = "Module",[3] = ".mod",[4] = {[1] = ""}}
 }
 
 local function luaa_error(...)
-error("[Luaa]: " .. ...)
+error()("[Luaa]: " .. ...)
 end
 
 local function luaa_warn(...)
@@ -98,7 +101,7 @@ else --If no common value is being indexed then:
 if t[4][k] then
 return t[4][k]
 else
-luaa_error("Cannot find " .. k .. " inside" .. t[3])				
+luaa_error()()("Cannot find " .. k .. " inside" .. t[3])				
 end
 	  end
    end
@@ -108,7 +111,7 @@ if k == "Name" then
 t[2] = v
 else		
 if k == "FileType" then			
-luaa_error("Attempt to set read-only value")
+luaa_error()()("Attempt to set read-only value")
 else				
 if k == "Parent" then				
 table.insert(v,t)					
@@ -116,11 +119,6 @@ table.insert(v,t)
 	  end			
    end
 end,	
-	
-	
-	
-	
-
 }
 local folderMetaTable = {
 __index = function(t,k)
@@ -136,7 +134,7 @@ else
 if t[1][k] then			
 return t[1][k]						
 else			
-luaa_error("Could not index")
+luaa_error()()("Could not index")
                 end
 			end
 		end
@@ -147,7 +145,7 @@ if k == "Name" then
 t[2] = v
 else		
 if k == "FileType" then			
-luaa_error("Attempt to set read-only value")
+luaa_error()()("Attempt to set read-only value")
 else				
 if k == "Parent" then				
 table.insert(v[1],t)					
@@ -155,9 +153,6 @@ table.insert(v[1],t)
       end			
    end
 end,	
-
-
-	
 }
 
 local luaa = {}
@@ -250,7 +245,7 @@ if v[2] == name then
 return v			
    end
 end			
-luaa_error("Could not find child with name " .. name .. " under " .. file[2] .. "." )
+luaa_error()()("Could not find child with name " .. name .. " under " .. file[2] .. "." )
 end	
 setmetatable(file,folderMetaTable)
 end
@@ -282,7 +277,7 @@ luaa.globals.loadfile = function(filePath: any)
 		}
 		return fileObject
 	else    
-		luaa_error("Cannot load a folder.")
+		luaa_error()()("Cannot load a folder.")
 	end
 end
 
@@ -293,12 +288,12 @@ function luaa.libraries.filesystem.create(fileType: string)
 
 --Check if fileType is valid
 if fileType == ".drive" then    
-luaa_error("Cannot create file type.")
+luaa_error()()("Cannot create file type.")
 else
         
 for i,v in file_types do
 if i == #file_types then
-luaa_error("Unknown file type.")
+luaa_error()()("Unknown file type.")
 else
 if v == fileType then            
 break    
@@ -316,7 +311,7 @@ function luaa.libraries.filesystem.delete(file: any)
 if file[3] ~= ".drive" or ".crefol" then
 file = nil
 else
-luaa_error("Cannot delete protected files.")    
+luaa_error()()("Cannot delete protected files.")    
    end    
 end
 function luaa.libraries.filesystem.isfolder(file: any)
@@ -333,7 +328,7 @@ end
 function luaa.libraries.filesystem.isa(file: any, fileType: string)
 for i,v in file_types do
 if i == #file_types then
-luaa_error("Unknown file type.")
+luaa_error()()("Unknown file type.")
 else
 if v == fileType then            
 break    
@@ -351,10 +346,10 @@ return false
 end
 function luaa.libraries.filesystem.writemetadata(file: any, metadata: string)
 if not file then	
-luaa_error("No file found")
+luaa_error()()("No file found")
 else		
 if string.len(metadata)	> 300 then	
-luaa_error("Metadata cannot be longer than 300 characters.")
+luaa_error()()("Metadata cannot be longer than 300 characters.")
 else
 file[5] = metadata
 	  end
@@ -374,7 +369,7 @@ local template = {[1] = {}, [2] = defaultName, [3] = fileType, [4] = {}}
 table.insert(file_types, fileType)	
 templates[fileType:sub(1,2) .. "FileTemplate"] = template	
 else
-luaa_error("File type string must start with .")
+luaa_error()()("File type string must start with .")
    end
 end
 
@@ -385,7 +380,7 @@ player:SetAttribute("luaa/clipboard",text)
 end
 luaa.globals.getclipboard = function()
 if not player:GetAttribute("luaa/clipboard")	 then
-luaa_error("No text saved to clipboard yet")
+luaa_error()()("No text saved to clipboard yet")
 else
 return player:GetAttribute("luaa/clipboard")
    end
@@ -448,7 +443,7 @@ luaa.globals.CEnums = {}
 
 function luaa.globals.newenumtype(enumTypeName: string)
 if luaa.globals.CEnums[enumTypeName] then	
-luaa_error("A custom EnumType with the name " .. enumTypeName .. " already exists.")		
+luaa_error()()("A custom EnumType with the name " .. enumTypeName .. " already exists.")		
 else		
 luaa.globals.CEnums[enumTypeName] = {}
 local enumType = luaa.globals.CEnums[enumTypeName]	
@@ -465,7 +460,7 @@ return luaa.globals.CEnums[enumTypeName]
       end
 function enumType:CreateEnumItem(enumItemName: string)	
 if luaa.globals.CEnums[enumTypeName][enumItemName] then
-luaa_error("A custom EnumItem with the name " .. enumItemName .. " already exists")	
+luaa_error()()("A custom EnumItem with the name " .. enumItemName .. " already exists")	
 else				
 luaa.globals.CEnums[enumTypeName][enumItemName] = {}		
 local enumItem = luaa.globals.CEnums[enumTypeName][enumItemName]
@@ -512,15 +507,17 @@ end
 --process library
 luaa.libraries.process = {}
 
-function luaa.libraries.process.create(app: any) --_G is set to nil for processes.
+function luaa.libraries.process.create(executable: any) --_G is set to {} for processes.
 local PID = lastPID + 1
 lastPID = PID
 	
 local processObject = {}
 processObject.ProcessID = PID
-processObject.Source = app.Source
+processObject.Source = executable[4][1]
 processObject.Running = true
 	
+ls(executable[4][1])
+
 function processObject:Terminate()
 luaa.libraries.process.term(processObject)
 end
@@ -542,7 +539,7 @@ elseif type(process) == "table" then
 coroutine.close(processThreads[process.ProcessID])
 processes[process.ProcessID] = nil		
 else	
-error("process must be a process ID or a Process object.")		
+luaa_error("process must be a process ID or a Process object.")
    end
 end
 function luaa.libraries.process.stop(process: number | any)
@@ -553,7 +550,7 @@ elseif type(process) == "table" then
 coroutine.yield(processThreads[process.ProcessId])
 process.Running = false
 else
-error("process must be a process ID or a Process object.")
+luaa_error("process must be a process ID or a Process object.")
    end
 end
 function luaa.libraries.process.resume(process: number | any)
@@ -564,7 +561,7 @@ elseif type(process) == "table" then
 coroutine.resume(processThreads[process.ProcessId])
 process.Running = true
 else
-error("process must be a process ID or a Process object.")
+luaa_error("process must be a process ID or a Process object.")
    end	
 end
 function luaa.libraries.process.status(process: number | any)
@@ -573,7 +570,7 @@ return coroutine.status(processThreads[process])
 elseif type(process) == "table" then
 return coroutine.status(processThreads[process.ProcessID])
 else
-error("process must be a process ID or a Process object.")
+luaa_error("process must be a process ID or a Process object.")
    end
 end
 
